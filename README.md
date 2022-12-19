@@ -2,21 +2,15 @@
 
 Helm is a package manager for kubernetes like apt,yum, So it used to ("package" Yaml files) and "push" them into public or private repositories
 
-## Difference between Helm2 and Helm3 :
+## Lifecycle management with Helm 
+ each time we pull a chart and install it a release which is "your application or a package or collections of kubernetes objects" is created  
+ and revision is the upgrade that happened in each release like update an image and so on .
 
-Helm2 Consists of 2 parts :
 
-CLIENT (helm cli): 					
-	  when ever you deploy a helm chart,then helm client will send the "yaml files" to tillers that actually run in a kubernetes cluster 
+## Difference between Helm2 and Helm3
+**Helm2:** Consists of CLIENT (helm cli) when ever you deploy a helm chart,then helm client will send the "yaml files" to tillers that actually run  in a kubernetes cluster.And SERVER (Tiller) that run in a kubernetes cluster and executes the request that send from "helm cli" and create a component from this yaml files inside kubernetes cluster  
+**Helm3:** Delete Tiller becouse it consumped a lot of power inside kubernetes cluster
 
-SERVER (Tiller):  
-     it's run in a kubernetes cluster and executes the request that send from "helm cli"
-	   and create a component from this yaml files inside kubernetes cluster
-     tiller will store any configuration you did "create,change deployment" so you can rollback to any previous version
-	
-Helm v3:
-	 Delete Tiller becouse it consumped a lot of power inside kubernetes cluster
-  
 ## Installation
 
 From Homebrew (macOS)
@@ -50,17 +44,37 @@ templates/ : the actual template files
 ## Helm Commands:
 ```bash
 # create helm chart
-helm create microservice
-
+helm create microservice-release
+# testing purpose >> see your release with its values before deployed
+helm template ./webapp/
+# list all releases
+helm list
+# history of partuclar releases
+helm history microservice-release
+# rollback to previous release 
+helm rollback microservice-release 1      ...>> number of revision
 ```
 
-## Contributing
+## Functions in helm 
 
-Pull requests are welcome. For major changes, please open an issue first
-to discuss what you would like to change.
+Functions in helm help transform data from one format to another.
+So what we need here is a simple way for our chart to have some default values that it can fall back on in case the users don’t provide anything in their values. yaml file we can do such a thing using "functions" 
 
-Please make sure to update tests as appropriate.
+The details about arguments that a function takes can be found in the Helm documentation pages.
+ - [Functions in helm](https://helm.sh/docs/chart_template_guide/function_list/)
+ 
+```go 
+  # this relase had its value from values defined in the values.yaml file
+  {{ .Values.image.repository }}     >>     image: nginx
+  # if the user didn't enter a value please, provide a default value using default func.
+  {{ default "nginx" .Values.image.repository }}     >>     image: nginx
+  
+  # Another example of using function in helm
+  {{ .Values.image.tag | upper | quote }}     >>     name: "NGINX"
+```
 
-## License
 
-[MIT](https://choosealicense.com/licenses/mit/)
+
+
+
+
