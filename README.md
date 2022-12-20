@@ -75,6 +75,7 @@ The details about arguments that a function takes can be found in the Helm docum
 ## Conditionals
 
 We want to conditionally add these lines depending upon whether the variable was defined or no in helm chart 
+ - [Conditions in helm](https://helm.sh/docs/chart_template_guide/control_structures/#ifelse)
 ```go 
   # we can encapsulate the lines that we want to be available in an if conditional block only if the orglabel value is defined.use "-" to ride of spaces
   # If the orglabel value is not set in the values.yaml file, then orglabel won't be available in the output file either.
@@ -103,6 +104,28 @@ We want to conditionally add these lines depending upon whether the variable was
   
 ```
 
+## With block to specify a scope:
 
+use with block when everything falls under the same scope 
+- [Flow Control in helm](https://helm.sh/docs/chart_template_guide/control_structures/#modifying-scope-using-with)
 
+```go 
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.Release.Name }}
+data:
+  {{- with .Values.app }}
+    {{- with .ui  }} 
+      background: {{ .bg }}
+      forground: {{ .fg }}
+    {{- end }}
+    {{- with .db  }}
+      database: {{ .name }}
+      connection: {{ .conn }}
+    {{- end }}
+  // As The release object is in the root scope, so the only way to access it is using $ that will take you all the way to the root
+  release: {{ $.Release.Name }}   
+  {{- end }}
+```
 
