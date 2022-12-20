@@ -72,8 +72,36 @@ The details about arguments that a function takes can be found in the Helm docum
   # Another example of using function in helm
   {{ .Values.image.tag | upper | quote }}     >>     name: "NGINX"
 ```
+## Conditionals
 
-
+We want to conditionally add these lines depending upon whether the variable was defined or no in helm chart 
+```go 
+  # we can encapsulate the lines that we want to be available in an if conditional block only if the orglabel value is defined.use "-" to ride of spaces
+  # If the orglabel value is not set in the values.yaml file, then orglabel won't be available in the output file either.
+  {{- if .Values.orgLabel }}
+  labels:
+     org: {{ .Values.orgLabel }} 
+  {{- end }}
+  
+  #We have if, else if, and else statements in if conditional blocks, in Helm charts 
+  {{- if .Values.orgLabel }}
+  labels:
+     org: {{ .Values.orgLabel }} 
+  {{- else if eq .Values.orgLabel "hr" }}  
+     org: human resources 
+  {{- end }}
+  
+  # the common examples whether to create objects of a certain kinds like serviceaccount or not.I want to provide an option for the user 
+  # to customize the creation of the service account based on a setting in the values.yaml file.
+  # I add a section called service account with a field create set to true, and I only want to create the service account if this field is set to true.
+  {{- if .Values.serviceAccount.create }}
+  apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: {{ .Release.Name }}
+  {{- end }}
+  
+```
 
 
 
