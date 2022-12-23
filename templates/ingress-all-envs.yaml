@@ -1,0 +1,91 @@
+{{- if .Values.ingress.allenvs -}}
+{{- $fullName := include "DXLchart.fullname" . -}}
+{{- $svcPort := .Values.service.port -}}
+{{- $letsencrypt := and (.Values.ingress.external | default false) (.Values.ingress.letsencrypt | default false) -}}
+{{- $letsencryptSecretName := print .Values.ingress.secure.letsencrypt.secretPrefix $fullName -}}
+{{- $hostnameint := print (.Values.ingress.external | default false | ternary .Values.ingress.name.external.short "" | default $fullName) (and (.Values.ingress.external | default false) (not (empty .Values.ingress.name.external.short)) | ternary .Values.ingress.name.external.suffix "" | default "-cz-int") (.Values.ingress.external | default false | ternary .Values.ingress.name.domain.external .Values.ingress.name.domain.internal) -}}
+{{- $hostnamesys := print (.Values.ingress.external | default false | ternary .Values.ingress.name.external.short "" | default $fullName) (and (.Values.ingress.external | default false) (not (empty .Values.ingress.name.external.short)) | ternary .Values.ingress.name.external.suffix "" | default "-cz-sys") (.Values.ingress.external | default false | ternary .Values.ingress.name.domain.external .Values.ingress.name.domain.internal) -}}
+{{- $hostnamepre := print (.Values.ingress.external | default false | ternary .Values.ingress.name.external.short "" | default $fullName) (and (.Values.ingress.external | default false) (not (empty .Values.ingress.name.external.short)) | ternary .Values.ingress.name.external.suffix "" | default "-cz-pre") (.Values.ingress.external | default false | ternary .Values.ingress.name.domain.external .Values.ingress.name.domain.internal) -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullName }}-allenvs
+  labels:
+    {{- include "DXLchart.labels" . | nindent 4 }}
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.ingress.external | default false | ternary "nginx-external" "nginx-internal" }}
+    {{- if and .Values.ingress.external .Values.ingress.letsencrypt }}
+    cert-manager.io/issuer: {{ .Values.ingress.secure.letsencrypt.issuer }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- include "DXLchart.governanceAnnotations" . | nindent 4 }}
+spec:
+{{- if .Values.ingress.default }}
+  tls:
+  - hosts:
+    - {{ $hostnameint }}
+    - {{ $hostnamesys }}
+    - {{ $hostnamepre }}
+    secretName: {{ $letsencrypt | ternary $letsencryptSecretName .Values.ingress.secure.secretName }}
+  rules:
+  - host: {{ $hostnameint }}
+    http:
+      paths:
+      - path: '/'
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ $fullName }}
+            port:
+              number: {{ $svcPort }}
+  - host: {{ $hostnamesys }}
+    http:
+      paths:
+        - path: '/'
+          pathType: Prefix
+          backend:
+            service:
+              name: {{ $fullName }}
+              port:
+                number: {{ $svcPort }}
+  - host: {{ $hostnamepre }}
+    http:
+      paths:
+        - path: '/'
+          pathType: Prefix
+          backend:
+            service:
+              name: {{ $fullName }}
+              port:
+                number: {{ $svcPort }}
+
+{{- else }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+      {{- range .hosts }}
+        - {{ . | quote }}
+      {{- end }}
+      secretName: {{ $letsencrypt | ternary $letsencryptSecretName .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+        {{- range .paths }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullName }}
+                port:
+                  number: {{ $svcPort }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}

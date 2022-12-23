@@ -1,0 +1,30 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "DXLchart.fullname" . }}-ingress
+  labels:
+  {{- include "DXLchart.labels" . | nindent 4 }}
+  annotations:
+  {{- include "DXLchart.governanceAnnotations" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "DXLchart.selectorLabels" . | nindent 6 }}
+  ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            name: ingress-internal
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            name: ingress-external
+      ports:
+        - protocol: TCP
+          port: 8080
+  policyTypes:
+    - Ingress
+{{- end }}

@@ -1,0 +1,202 @@
+{{ $fullname := print (include "DXLchart.fullname" .) }}
+{{ $secretsPasswordsSuffix := .Values.secrets.passwordsNameSuffix | default "-passwords" }}
+{{ $secretsMountPasswords := and .Values.secrets.passwords (not .Values.secrets.passwordsDisableMount) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "DXLchart.fullname" . }}
+  labels:
+  {{- include "DXLchart.labels" . | nindent 4 }}
+  annotations:
+  {{- include "DXLchart.governanceAnnotations" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "DXLchart.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "DXLchart.selectorLabels" . | nindent 8 }}
+        {{- include "DXLchart.governanceLabels" . | nindent 8 }}
+      annotations:
+        {{- include "DXLchart.governanceAnnotations" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "DXLchart.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      volumes:
+        {{- if .Values.fluentbit.enabled }}
+        - name: {{ .Release.Name }}-logs
+          emptyDir: {}
+        - name: {{ .Release.Name }}-fluentbit-config
+          configMap:
+            name: {{ .Release.Name }}-fluentbit-config
+        - name: fluentbit-tls
+          secret:
+            secretName: fluentbit-tls
+        {{- end }}
+        {{- if $secretsMountPasswords }}
+        - name: passwords-volume
+          secret:
+            secretName: {{ $fullname }}{{ $secretsPasswordsSuffix }}
+        {{- end }}
+        {{- if .Values.secrets.files }}
+        - name: secrets-volume
+          secret:
+            secretName: {{ $fullname }}-files
+        {{- end }}
+        {{- range .Values.secrets.external }}
+        - name: {{ .name | quote }}
+          secret:
+            secretName: {{ .name | quote }}
+            defaultMode: {{ .mode }}
+        {{- end }}
+        {{- if .Values.configs.infra }}
+        - name: infra-volume
+          configMap:
+            name: {{ $fullname }}-infra
+        {{- end }}
+        {{- range .Values.configs.external }}
+        - name: {{ .name | quote }}
+          configMap:
+            name: {{ .name | quote  }}
+            defaultMode: {{ .mode }} 
+        {{- end }}
+        {{- range .Values.mounts }}
+        - name: {{ .name }}
+          {{- if .volume.secret }}
+          secret:
+            secretName: {{ $fullname }}-{{- .volume.secret.fullnameSuffix }}
+          {{- end }}
+          {{- if .volume.configMap }}
+          configMap:
+            name: {{ $fullname }}-{{- .volume.configMap.fullnameSuffix }}
+          {{- end }}
+        {{- end }}
+      containers:
+        - name: {{ include "DXLchart.name" . }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.name }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort | default 8080 }}
+              protocol: TCP
+          volumeMounts:
+            {{- if .Values.fluentbit.enabled }}
+            - name: {{ .Release.Name }}-logs
+              mountPath: {{ .Values.fluentbit.logsFolder | default "/logs" }}
+              readOnly: false
+            {{- end }}
+            {{- range .Values.secrets.external }}
+            - name: {{ .name | quote }}
+              mountPath: {{ .path | quote }}
+              readOnly: true
+            {{- end }}
+            {{- if $secretsMountPasswords }}
+            - name: "passwords-volume"
+              mountPath: {{ .Values.secrets.passwordsMountPath | default "/config/passwords" | quote }}
+              readOnly: true
+            {{- end }}
+            {{- if .Values.secrets.files }}
+            - name: secrets-volume
+              mountPath: {{ .Values.secrets.filesMountPath | default "/config/secrets" | quote }}
+              readOnly: true
+            {{- end }}
+            {{- if .Values.configs.infra }}
+            - name: "infra-volume"
+              mountPath: {{ .Values.configs.infraMountPath | default "/config/infra" | quote }}
+              readOnly: true
+            {{- end }}
+            {{- range .Values.configs.external }}
+            - name: {{ .name | quote  }}
+              mountPath: {{ .path | quote }}
+              readOnly: true
+            {{- end }}
+            {{- range .Values.mounts }}
+            - name: {{ .name | quote }}
+              mountPath: {{ .path | quote }}
+              readOnly: {{ .readOnly | default false }}
+            {{- end }}
+          env:
+            - name: ENVIRONMENT_NAME
+              value: {{ .Values.governance.environment.name | squote }}
+            {{- if and .Values.secrets.passwords .Values.secrets.passwordsBindEnv }}
+            {{- range $key, $value := .Values.secrets.passwords }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  key: {{ $key }}
+                  name: {{ $fullname }}{{ $secretsPasswordsSuffix }}
+            {{- end }}
+            {{- end }}
+          {{- with .Values.env }}
+          {{- toYaml . | nindent 12 }}
+          {{- end }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readinessPath }}
+              port: {{ .Values.service.targetPort | default 8080 }}
+              scheme: HTTP
+            initialDelaySeconds: 60
+            timeoutSeconds: 2
+            periodSeconds: 30
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.livenessPath }}
+              port: {{ .Values.service.targetPort | default 8080 }}
+              scheme: HTTP
+            initialDelaySeconds: 120
+            timeoutSeconds: 2
+            periodSeconds: 10
+            failureThreshold: 1
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+        {{- if .Values.fluentbit.enabled }}
+        - name: fluentbit
+          image: {{ .Values.fluentbit.image }}
+          env:
+            - name: ENVIRONMENT_NAME
+              value: {{ .Values.governance.environment.name | squote }}
+            - name: kafkapassword
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-passwords
+                  key: kafkapassword
+          volumeMounts:
+            - name: {{ .Release.Name }}-logs
+              mountPath: {{ .Values.fluentbit.logsFolder | default "/logs" }}
+            - name: {{ .Release.Name }}-fluentbit-config
+              mountPath: {{ .Values.fluentbit.configFolder | default "/fluent-bit/etc" }}
+            - name: fluentbit-tls
+              readOnly: true
+              mountPath: {{ .Values.fluentbit.caCert | default "/fluent-bit/etc/ca.cert" }}
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "64Mi"
+              cpu: "100m"
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
