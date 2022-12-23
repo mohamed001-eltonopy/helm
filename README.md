@@ -177,6 +177,129 @@ metadata:
     app: webapp-color
 {{- end }}
 ```
+## Named Templates and Indentation func.
+- you might see in deployment file "labels" that are repeated multiple times throughout this file or in other objects like service.yaml and so on.
+```go
+metadata:
+  name: {{ .Relase.Name }}-nginx
+  // Here we have a bunch of labels defined  multiple times throughout this deployment.yaml file
+  labels:
+    app.kubernetes.io/name: {{ .Relase.Name }}
+    app.kubernetes.io/instance: {{ .Relase.Name }}
+```
+We can remove the repeating lines by using **"named template"**:
+1-We move the repeating lines to a file called _helpers.tpl file "this file not consider as a usual template file" Because when we run
+the helm create command, helm reads all the files in the templates directory and converts them to Kubernetes manifests except this file.
+"So any file starting with an (_) are skipped from being converted into a Kubernetes manifest file."
+- [Named Templates in helm](https://helm.sh/docs/chart_template_guide/named_templates/#helm)
+```go
+// We can then give these lines or this template a name using the define statement like this inside (_helper.tpl) file.
+{{- define "labels" }}
+    app.kubernetes.io/name: {{ .Relase.Name }}
+    app.kubernetes.io/instance: {{ .Relase.Name }}
+{{- end }}    
+```
+Now, these lines can now be imported, or rather included anywhere we want using a simple template statement like this in deployment file for example:
+
+```go
+metadata:
+  name: {{ .Relase.Name }}-nginx
+  //you define what helper template you’d like to use and we used "." to refers to the current scope and it is then accessible from within the helper file
+  labels:
+    {{- template "labels"  . }}
+```
+But still there's an issue as The template statement added the lines from the helper file,with the same indentation for all the labels 
+and thus resulting in a file that’s not formatted correctly, and we will fix that issue using "Indentation"
+**Indentation with "include"func** 
+- [Indentation in helm](https://helm.sh/docs/chart_template_guide/yaml_techniques/#indenting-and-templates)
+There is a function that helps fix the spaces in helm template which is "indent", 
+Also we can't use "template" to import named template from _helper.tpl with indent func as  template is not a function, it is an action.
+So, Another function that does the same job as template is the "include" function, it can import a named template,and also pipe it to another function.
+```go
+spec:
+  selector:
+    matchLabels:
+      {{- include "labels"  . | indent 2 }}
+```
+
+## Chart Hooks
+extra actions are implemented with what is known as hooks.
+When a user installing various Kubernetes objects to get our app up and running, they can do some extra stuff too For example:
+we can write the charts in such a way that whenever we do a Helm upgrade,install,  a database can be automatically backed up before the upgrade,install 
+so we can restore db from backup, OR it could be sending an email alert before an upgrade operation.
+**For Example**:
+we want to take a backup of the database before the chart is actually upgraded, se We use the pre-upgrade hook.
+The pre-upgrade hook runs a predefined action which in our case " to take a backup of the database." So Helm waits for this action to be completed
+ before proceeding to the final phase of installation or upgrading applications on Kubernetes. And then After the upgrade phase, we'd like to perform
+some kind of cleanup activity So For this, we add a post-upgrade hook , The post-upgrade hook runs after the install phase is successful 
+and performs actions such as sending an email status 
+**how these hooks are configured**
+Say you have a script to back up the database called backup.sh, how do you get that script executed by Kubernetes?
+So You develop the script, and then run it as "job" as we want the script to be run once "We know that a pod runs forever", 
+and runs the backup script using an Alpine image, and this file is placed along with the other templates directory "deployment,service,secret" 
+let we called it **backup-job.yaml** It has to be run before the install phase as a pre-installed hook 
+```go
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Relase.Name }}-nginx
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: pre-upgrade-backup-job
+        image: "alpine"
+        command: ["/bin/backup.sh"] 
+ ```
+So,How do we differentiate the chart hook from the normal template files? How do you tell Helm that this job that we've created is a pre-upgrade hook
+and not a usual template? 
+For this, we add an **annotation** which is a way for us to add additional metadata to an object which may be used by clients of Kubernetes
+in this case, Helm, to store data about that object and perform some kind of actions. 
+So, We add an annotation with the key **helm.sh/hook: pre-upgrade**  This configures this job as a pre-upgrade hook 
+```go
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Relase.Name }}-nginx
+  annotations:
+    # This is what defines this resource as a hook. Without this line,
+    # job is considered part of the release.
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-4"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: pre-upgrade-backup-job
+        image: "alpine"
+        command: ["/bin/backup.sh"] 
+ ```
+**multiple hooks with setting a weight**
+We can have multiple hooks configured for each step. 
+For example, we can have multiple pre-upgrade hooks configured. This could be for performing other activities.
+How do we define in what order these hooks are to be executed? 
+We set a weight for each job in the order they should be run. Helms sorts these in ascending order (-4,1,3) and so on.
+To set a weight for a hook we add an annotation with the key **helm.sh/hook-weight": "-4"** 
+What happens after the backup job is completed? The resource created for the hook, which is, in this case,is the job resource is going to stay on
+as a resource on the cluster We can configure them to be cleaned up by setting **hook deletion policies**
+we add the annotation **"helm.sh/hook-delete-policy": hook-succeeded**  and set a supported value (hook-succeeded,hook-failed,before-hook-creation)
+Now, hook-succeeded deletes the resource after the hook is successfully executed.Now, of course, this means that if the hook fails to execute,
+the resources won't be deleted 
+
+- [Chart Hooks in helm](https://helm.sh/docs/topics/charts_hooks/#helm)
+- [Writing a Hook](https://helm.sh/docs/topics/charts_hooks/#writing-a-hook)
+
+
+
+
+
+
+
+
+
 
 
 
