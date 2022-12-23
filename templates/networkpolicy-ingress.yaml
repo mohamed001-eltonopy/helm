@@ -2,14 +2,14 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "DXLchart.fullname" . }}-ingress
+  name: {{ include "ChartName.fullname" . }}-ingress
   labels:
-  {{- include "DXLchart.labels" . | nindent 4 }}
+  {{- include "ChartName.labels" . | nindent 4 }}
   annotations:
-  {{- include "DXLchart.governanceAnnotations" . | nindent 4 }}
+  {{- include "ChartName.governanceAnnotations" . | nindent 4 }}
 spec:
   podSelector:
-    matchLabels: {{- include "DXLchart.selectorLabels" . | nindent 6 }}
+    matchLabels: {{- include "ChartName.selectorLabels" . | nindent 6 }}
   ingress:
     - from:
       - namespaceSelector:
