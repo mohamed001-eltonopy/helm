@@ -81,7 +81,7 @@ spec:
           {{- end }}
         {{- end }}
       containers:
-        - name: {{ include "DXLchart.name" . }}
+        - name: {{ include "ChartName.name" . }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.name }}"
