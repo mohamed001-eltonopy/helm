@@ -1,34 +1,34 @@
-{{ $fullname := print (include "DXLchart.fullname" .) }}
+{{ $fullname := print (include "ChartName.fullname" .) }}
 {{ $secretsPasswordsSuffix := .Values.secrets.passwordsNameSuffix | default "-passwords" }}
 {{ $secretsMountPasswords := and .Values.secrets.passwords (not .Values.secrets.passwordsDisableMount) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "DXLchart.fullname" . }}
+  name: {{ include "ChartName.fullname" . }}
   labels:
-  {{- include "DXLchart.labels" . | nindent 4 }}
+  {{- include "ChartName.labels" . | nindent 4 }}
   annotations:
-  {{- include "DXLchart.governanceAnnotations" . | nindent 4 }}
+  {{- include "ChartName.governanceAnnotations" . | nindent 4 }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "DXLchart.selectorLabels" . | nindent 6 }}
+      {{- include "ChartName.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "DXLchart.selectorLabels" . | nindent 8 }}
-        {{- include "DXLchart.governanceLabels" . | nindent 8 }}
+        {{- include "ChartName.selectorLabels" . | nindent 8 }}
+        {{- include "ChartName.governanceLabels" . | nindent 8 }}
       annotations:
-        {{- include "DXLchart.governanceAnnotations" . | nindent 8 }}
+        {{- include "ChartName.governanceAnnotations" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "DXLchart.serviceAccountName" . }}
+      serviceAccountName: {{ include "ChartName.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       volumes:
